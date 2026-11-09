@@ -34,7 +34,7 @@ import yaml
 from table_sources import sibling
 
 #: The RG6's model file; every other model lies beside it.
-RG6_MODEL_RELPATH = "robot/contract/src/clair/robot/contract/profiles/grippers/rg6_v2.yaml"
+RG6_MODEL_RELPATH = "robot/contract/src/clair/robot/contract/profiles/grippers/rg6.yaml"
 
 #: The two copies of this repo, addressed locally -- only the model files live in a sibling.
 _HERE = pathlib.Path(__file__).resolve().parent.parent
@@ -68,7 +68,7 @@ def test_the_json_carries_a_table_at_all():
 
 def test_the_bridge_copy_matches_the_rg6_model():
     """The bridge's copy.  Compared with ``==``, not ``approx``: any difference means it was retyped, not generated."""
-    assert _json_table() == _model_table("rg6_v2")
+    assert _json_table() == _model_table("rg6")
 
 
 def test_the_declared_joint_limits_match_the_table_ends():
@@ -150,7 +150,7 @@ def _linkage(model: str):
 @pytest.fixture(scope="module")
 def profile_linkage():
     """The RG6's, the model the bridge carries a copy of."""
-    return _linkage("rg6_v2")
+    return _linkage("rg6")
 
 
 @pytest.fixture(scope="module")
