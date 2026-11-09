@@ -1,0 +1,62 @@
+limit:
+  # The mechanical open stop does NOT reach the geometric q = 0.  Measured on 2026-08-27 at the a200-0553 with a
+  # caliper, pad face to pad face: at the stop the hand is 151,10 mm wide, while the four-bar chain computes
+  # 153,17 mm there -- 2,07 mm that the model would hand out as usable opening.  It is not a modelling error of the
+  # chain: at q = 0,20 / 0,41336 / 0,73487 / 1,00485 the model was right to within 0,30 mm (140,25 against 140,08;
+  # 119,70 against 120,00; 79,95 against 80,00; 40,15 against 40,00), so it carries to right next to the stop and
+  # only the stop itself falls out.  Nor is it the direction dependence: approaching the same q by opening reads
+  # 1,00 mm WIDER than by closing (141,25 against 140,25 at q = 0,20), and the stop can only be reached by opening
+  # -- the effect works against the deviation, not for it.
+  #
+  # Same class of clamp as `upper` below, and for the same reason: the geometry runs past what the hardware does.
+  lower: 0.038
+  # Upstream: 1.3.  Clamped here, because at that point the fingers have
+  # ALREADY passed THROUGH each other: the clear width falls to 0 at
+  # q = 1,25478 and rises again beyond it (at 1,3 the model shows 6,8 mm, with
+  # crossed fingers).  A planner would have seen an opening there that does not
+  # exist.  Recomputed by forward kinematics over the flex_finger gripping
+  # faces, bisection onto the zero crossing.
+  upper: 1.25478
+  effort: 10.0
+  velocity: 0.5
+
+origin:
+  single_bracket: { x: 0.0, y: 0.0, z: 0.0561 }
+  moment_arm: { x: -0.0238, y: 0.0, z: 0.088 }
+  truss_arm: { x: -0.0105, y: 0.0, z: 0.1111 }
+  safety_shield: { x: -0.00665, y: 0.0, z: -0.01155 }
+  finger_tip: { x: -0.05503, y: 0.0, z: 0.05807 }
+  flex_finger: { x: 0.0098, y: 0.0, z: 0.0218 }
+  grasp_frame: { x: 0.0, y: 0.0, z: 0.212 }
+
+# Mass, centre of mass and inertia tensor of every part, DERIVED -- ``tools/derive_link_inertia.py`` integrates each
+# collision mesh exactly (Eberly, polyhedral mass properties) and hands the parts one homogeneous density, fixed so
+# that the sum over all instances is the data sheet mass of 1,25 kg (OnRobot RG6 manual v6.6.2 §8.3.2, carried in
+# the profile a200_0553.yaml as ``gripper.datasheet.mass_kg``).  Regenerate rather than edit:
+#
+#     python3 tools/derive_link_inertia.py --report --check-cog <workspace>/urdf/robot.urdf
+#
+# Homogeneous density is wrong in detail -- the motor is denser than a rubber pad -- and the second data sheet figure
+# says how much it costs: at 1343,1 kg/m^3 the assembly's centre of gravity lands 90,58 mm above the tool base point
+# against the published 90,0 mm, so 0,58 mm out (measured 2026-08-31 at q = 0,038 rad on the generated bundle).  That
+# also settles a reading of the data sheet that the mass alone leaves open: 1,25 kg INCLUDES the mounting bracket.
+# Distributed without it, the 505 g of the bracket would have to go somewhere further out, and the centre of gravity
+# would not land where the manufacturer puts it.
+#
+# ``safety_shield`` gets a tensor but no share of the mass: the a200-0553 builds the macro with
+# ``safety_shield:=False``, so the part is not fitted.  Its numbers are here for the moment somebody switches it on.
+#
+# What this replaces was upstream's placeholder, ``mass: 0.001`` with ``ixx = iyy = izz = 0.001`` for every part --
+# wrong in both directions at once, three orders too light and about four too stiff, on a hand that hangs off the
+# wrist of a UR5.
+inertial:
+  single_bracket: {mass: 0.505194, cx: 0.005046, cy: -0.001295, cz: 0.032891, ixx: 0.000369027225, iyy: 0.000528601347, izz: 0.000452499964, ixy: 0.000027747789, ixz: 0.000027998103, iyz: -0.000009320611}
+  body: {mass: 0.527629, cx: 0.0, cy: 0.0005, cz: 0.052572, ixx: 0.00080576417, iyy: 0.000952747632, izz: 0.000298300929, ixy: 0.0, ixz: 0.0, iyz: 0.0}
+  moment_arm: {mass: 0.032157, cx: -0.035352, cy: 0.000514, cz: 0.034359, ixx: 0.000009562771, iyy: 0.000013447103, izz: 0.0000071515, ixy: -0.000000151551, ixz: 0.000006094391, iyz: 0.000000246176}
+  truss_arm: {mass: 0.041743, cx: -0.026282, cy: 0.0, cz: 0.027735, ixx: 0.000017635656, iyy: 0.000027798443, izz: 0.000016190865, ixy: 0.0, ixz: 0.000013416537, iyz: 0.0}
+  finger_tip: {mass: 0.019804, cx: -0.003973, cy: 0.0, cz: -0.001897, ixx: 0.000006141756, iyy: 0.000006298657, izz: 0.000001502116, ixy: 0.0, ixz: -0.000001654959, iyz: 0.0}
+  flex_finger: {mass: 0.013885, cx: -0.0047, cy: 0.0, cz: 0.001684, ixx: 0.000001948814, iyy: 0.000001532748, izz: 0.000000793322, ixy: -0.000000000007, ixz: -0.000000007431, iyz: -0.000000000001}
+  safety_shield: {mass: 0.052356, cx: 0.019584, cy: 0.000001, cz: -0.021167, ixx: 0.000013930985, iyy: 0.000018240997, izz: 0.000011714693, ixy: -0.000000000167, ixz: 0.000007027119, iyz: 0.000000000324}
+
+kinematics:
+  offset: -0.49

@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rg6_control</name>
+  <version>0.2.0</version>
+  <description>The OnRobot RG6's own: rg6_grip_bridge commands the real gripper over XML-RPC at the OnRobot URCap
+    and serves its GripperCommand action and state; rg6_moveit_patch writes its SRDF block.  The container mock is
+    gripper_control's gripper_sim, as for every model.</description>
+  <maintainer email="hannes.voss@haw-hamburg.de">Hannes Voss</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- rg6_grip_bridge (rclpy, the action and the state) -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <!-- rg6_moveit_patch (PyYAML for the moveit.yaml patch) -->
+  <exec_depend>python3-yaml</exec_depend>
+
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

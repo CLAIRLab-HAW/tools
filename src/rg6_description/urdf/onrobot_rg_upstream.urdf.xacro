@@ -1,0 +1,302 @@
+<?xml version="1.0"?>
+
+<!-- Mesh paths: package:// instead of upstream's "file://$(find ...)".
+     Two reasons, both measured on 2026-08-19:
+     1. The foxglove_bridge only serves what its asset_uri_allowlist permits, and
+        that one reads "^package://...".  With file:// Foxglove shows the model
+        WITHOUT meshes; that was exactly the symptom on the robot.
+     2. file://$(find ...) nails the absolute path of the BUILDING machine into
+        the model (/home/robot/onboard/gripper/install/...).  Neither the
+        workstation nor a container nor a replay can resolve it. -->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="onrobot_rg_macro">
+
+  <!-- materials -->
+  <xacro:include filename="$(find rg6_description)/urdf/materials_upstream.urdf.xacro" />
+
+
+
+
+  <!-- onrobot gripper -->
+  <xacro:macro name="onrobot_rg" params="parent *origin prefix:=''
+    model:='rg2_v1' safety_shield:=False bracket:='single_bracket' mount_angle:=0.0 standalone:=false real_hardware:=false
+    driver_joint:=''">
+    <xacro:property name="gripper_name" value="${prefix}gripper"/>
+    <!-- Name of the driver joint.  Upstream it is called "<prefix>gripper_joint";
+         this workspace has always known "rg6_finger_joint", and that name stands
+         in /joint_states, in the profile, in the SRDF patch, in the gripper
+         bridge and in the MuJoCo scenes.  A parameter here saves a rename on the
+         wire.  Empty = the upstream default. -->
+    <xacro:property name="driver"
+                    value="${driver_joint if driver_joint else gripper_name + '_joint'}"/>
+    <!-- load config from file -->
+    <xacro:property name="config_file" value="$(find rg6_description)/config/${model}.yaml"/>
+    <xacro:property name="config" value="${xacro.load_yaml(config_file)}"/>
+    <xacro:property name="limit" value="${config['limit']}"/>
+    <xacro:property name="origin" value="${config['origin']}"/>
+    <xacro:property name="inertial" value="${config['inertial']}"/>
+    <xacro:property name="offset" value="${config['kinematics']['offset']}"/>
+
+    <xacro:macro name="_limit" params="">
+      <limit lower="${limit['lower']}" upper="${limit['upper']}"
+             effort="${limit['effort']}" velocity="${limit['velocity']}"/>
+    </xacro:macro>
+
+    <xacro:macro name="_frame" params="id rpy">
+      <origin xyz="${origin[id]['x']} ${origin[id]['y']} ${origin[id]['z']}" rpy="${rpy}"/>
+    </xacro:macro>
+
+    <!-- The <origin> is what makes the tensor mean anything: it is taken about the part's own centre of mass, and
+         without the offset URDF reads it as being about the LINK frame instead.  For the body that is 52 mm out,
+         and the error goes into the model as a mass that hangs in the wrong place rather than as a parse failure.
+         rpy stays zero, because the tensor is written in the link's axes and not in its principal ones. -->
+    <xacro:macro name="_inertial" params="id">
+      <inertial>
+        <origin xyz="${inertial[id]['cx']} ${inertial[id]['cy']} ${inertial[id]['cz']}" rpy="0 0 0"/>
+        <mass value="${inertial[id]['mass']}"/>
+        <inertia ixx="${inertial[id]['ixx']}" iyy="${inertial[id]['iyy']}" izz="${inertial[id]['izz']}"
+                 ixy="${inertial[id]['ixy']}" ixz="${inertial[id]['ixz']}" iyz="${inertial[id]['iyz']}"/>
+      </inertial>
+    </xacro:macro>
+
+    <!-- The details the upstream meshes draw in one color: the blue ring at the mounting end, the caps over
+         the pivot pins where the arms meet the finger tip, and the covers on the finger arms, the last two in the
+         grip pads' gray.  tools/rg6_details_mesh.py writes them from the owner's detailed RG6 model, each in the
+         frame of the link it rides on (2026-10-10).  No <material>: the DAE carries its own color, and
+         RViz, Foxglove and clair.twin.collada take it from there, while a URDF material would paint the mesh over.
+         No <collision>.  The ring, the caps and the inlay lie inside the convex hull of their link's collision mesh
+         or at most 0.21 mm outside it (2026-10-10), so a body of their own would give the planner nothing.  The
+         plates span the gap between the moment and the truss arm, up to 21 mm outside the truss arm's hull; they
+         ride on the truss arm and slide up to about 7 mm against the real plates at the ends of the stroke, so a
+         body from them would put an obstacle where the real plate is not. -->
+    <xacro:macro name="_detail" params="mesh">
+      <visual>
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/${model}/visual/${mesh}.dae"/>
+        </geometry>
+      </visual>
+    </xacro:macro>
+
+    <!-- bracket -->
+    <link name="${gripper_name}_bracket">
+      <visual>
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/${model}/visual/${bracket}.stl"/>
+        </geometry>
+        <material name="onrobot/grey"/>
+      </visual>
+      <xacro:_detail mesh="${bracket}_ring"/>
+      <collision>
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/${model}/collision/${bracket}.stl"/>
+        </geometry>
+      </collision>
+      <xacro:_inertial id="${bracket}"/>
+    </link>
+
+    <joint name="${gripper_name}_bracket_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link = "${gripper_name}_bracket"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+
+    <!-- body -->
+    <link name="${gripper_name}_body">
+      <visual>
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/${model}/visual/body.stl"/>
+        </geometry>
+        <material name="onrobot/light_grey"/>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://rg6_description/meshes/${model}/collision/body.stl"/>
+        </geometry>
+      </collision>
+      <xacro:_inertial id="body"/>
+    </link>
+
+    <joint name="${gripper_name}_body_joint" type="fixed">
+      <parent link="${gripper_name}_bracket"/>
+      <child link = "${gripper_name}_body"/>
+      <xacro:_frame id="${bracket}" rpy="${mount_angle} 0.0 0.0"/>
+    </joint>
+
+    <!-- grasp frame -->
+    <link name="${gripper_name}_grasp_frame"/>
+
+    <joint name="${gripper_name}_grasp_frame_joint" type="fixed">
+      <parent link="${gripper_name}_body"/>
+      <child link = "${gripper_name}_grasp_frame"/>
+      <xacro:_frame id="grasp_frame" rpy="0.0 0.0 0.0"/>
+    </joint>
+
+    <!-- fingers -->
+    <xacro:macro name="finger" params="name is_master">
+
+      <!-- origin frame -->
+      <link name="${name}_origin">
+        <inertial>
+          <mass value="0.001"/>
+          <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001"/>
+        </inertial>
+      </link>
+
+      <joint name="${name}_origin_joint" type="fixed">
+        <parent link="${gripper_name}_body"/>
+        <child link = "${name}_origin"/>
+        <origin xyz="0 0 0" rpy="0 0 ${0 if is_master else pi}"/>
+      </joint>
+
+      <!-- moment bar -->
+      <link name="${name}_moment_arm">
+        <visual>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/moment_arm.stl"/>
+          </geometry>
+          <material name="onrobot/light_grey"/>
+        </visual>
+        <xacro:_detail mesh="moment_arm_details"/>
+        <collision>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/moment_arm.stl"/>
+          </geometry>
+        </collision>
+        <xacro:_inertial id="moment_arm"/>
+      </link>
+
+      <joint name="${driver if is_master else driver + '_mirror'}" type="revolute">
+        <parent link="${name}_origin"/>
+        <child link = "${name}_moment_arm"/>
+        <axis xyz="0 1 0"/>
+        <xacro:_frame id="moment_arm" rpy="0.0 ${offset} 0.0"/>
+        <xacro:_limit/>
+        <dynamics damping="0.17"/>
+        <xacro:unless value="${is_master}">
+          <mimic joint="${driver}" multiplier="1" offset="0"/>
+        </xacro:unless>
+      </joint>
+
+      <!-- truss bar -->
+      <link name="${name}_truss_arm">
+        <visual>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/truss_arm.stl"/>
+          </geometry>
+          <material name="onrobot/light_grey"/>
+        </visual>
+        <xacro:_detail mesh="truss_arm_details"/>
+        <collision>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/truss_arm.stl"/>
+          </geometry>
+        </collision>
+        <xacro:_inertial id="truss_arm"/>
+      </link>
+
+      <joint name="${name}_truss_arm_joint" type="revolute">
+        <parent link="${name}_origin"/>
+        <child link = "${name}_truss_arm"/>
+        <axis xyz="0 1 0"/>
+        <xacro:_frame id="truss_arm" rpy="0.0 ${offset} 0.0"/>
+        <xacro:_limit/>
+        <mimic joint="${driver}" multiplier="1" offset="0"/>
+      </joint>
+
+      <!-- safety shield -->
+      <xacro:if value="${safety_shield}">
+        <link name="${name}_safety_shield">
+          <visual>
+            <geometry>
+              <mesh filename="package://rg6_description/meshes/${model}/visual/safety_shield.stl"/>
+            </geometry>
+            <material name="onrobot/dark_grey"/>
+          </visual>
+          <collision>
+            <geometry>
+              <mesh filename="package://rg6_description/meshes/${model}/collision/safety_shield.stl"/>
+              <box size="0.0 0.0 0.0"/>
+            </geometry>
+          </collision>
+          <xacro:_inertial id="safety_shield"/>
+        </link>
+
+        <joint name="${name}_safety_shield_joint" type="revolute">
+          <parent link="${name}_finger_tip"/>
+          <child link = "${name}_safety_shield"/>
+          <axis xyz="0 1 0"/>
+          <xacro:_frame id="safety_shield" rpy="0.0 ${offset} 0.0"/>
+          <xacro:_limit/>
+          <mimic joint="${driver}" multiplier="1" offset="0"/>
+        </joint>
+      </xacro:if>
+
+      <!-- finger tip -->
+      <link name="${name}_finger_tip">
+        <visual>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/finger_tip.stl"/>
+          </geometry>
+          <material name="onrobot/light_grey"/>
+        </visual>
+        <!-- TWO collisions, and namely the ones shipped for it: the tip is modelled as a
+             convex decomposition (finger_tip_1 and finger_tip_2), while every other link here
+             uses its collision/ mesh anyway.  At this one place upstream points at the VISUAL
+             mesh, and that is the gripping face: 2154 triangles, concave, and every engine that
+             convexifies inflates it to 2.04 times its volume (measured 2026-08-28).  The two
+             collision parts are convex already (hull/mesh = 1.00) and together 236 + 176
+             triangles.  Upstream carried the block twice, but with the same visual mesh, hence
+             the decomposition instead of a copy. -->
+        <collision>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/finger_tip_1.stl"/>
+          </geometry>
+        </collision>
+        <collision>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/finger_tip_2.stl"/>
+          </geometry>
+        </collision>
+        <xacro:_inertial id="finger_tip"/>
+      </link>
+
+      <joint name="${name}_finger_tip_joint" type="revolute">
+        <parent link = "${name}_truss_arm"/>
+        <child link = "${name}_finger_tip"/>
+        <axis xyz="0 -1 0"/>
+        <xacro:_frame id="finger_tip" rpy="0.0 ${-offset} 0.0"/>
+        <xacro:_limit/>
+        <mimic joint="${driver}" multiplier="1" offset="0"/>
+      </joint>
+
+      <!-- flex finger -->
+      <link name="${name}_flex_finger">
+        <visual>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/visual/flex_finger.stl"/>
+          </geometry>
+          <material name="onrobot/dark_grey"/>
+        </visual>
+        <collision>
+          <geometry>
+            <mesh filename="package://rg6_description/meshes/${model}/collision/flex_finger.stl"/>
+          </geometry>
+        </collision>
+        <xacro:_inertial id="flex_finger"/>
+      </link>
+
+      <joint name="${name}_flex_finger_joint" type="fixed">
+        <parent link="${name}_finger_tip"/>
+        <child link = "${name}_flex_finger"/>
+        <xacro:_frame id="flex_finger" rpy="0.0 0.0 0.0"/>
+      </joint>
+
+    </xacro:macro>
+
+    <xacro:finger name="${gripper_name}_finger_1" is_master="true"/>
+    <xacro:finger name="${gripper_name}_finger_2" is_master="false"/>
+
+
+
+  </xacro:macro>
+
+</robot>
