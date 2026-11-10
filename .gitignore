@@ -23,3 +23,8 @@ dist/
 # colcon
 install/
 log/
+
+# The owner's local material: the Onshape export of the RG6 (gripper_rg6.gltf), not ours to redistribute, and
+# rg6_details_mesh.py, which wrote the three detail meshes under src/rg6_description from it.  The meshes are committed
+# and nothing regenerates them; the script's last versioned state is tools 5642307.
+/.local/

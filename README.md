@@ -10,7 +10,7 @@ ROS 2 Jazzy packages for end effectors: parallel grippers (OnRobot RG6, Robotiq 
 | `src/rg6_control` | ament_cmake | `rg6_grip_bridge.py` with `rg6_finger_kinematics.json`, `rg6_moveit_patch` |
 | `src/rg6_description` | ament_cmake | OnRobot RG6 v2: URDF/xacro, meshes, `config/rg6_v2.yaml` |
 | `src/tool_description` | ament_cmake | Tool macros `rg6_tool(parent)` and `key_holder(parent)`, key holder meshes |
-| `scripts/` | — | `derive_finger_kinematics.py`, `derive_link_inertia.py`, `rg6_details_mesh.py` (not installed) |
+| `scripts/` | — | `derive_finger_kinematics.py`, `derive_link_inertia.py` (not installed) |
 | `tests/` | — | pytest suite |
 
 The Robotiq 2F-85 description is `ros-jazzy-robotiq-description` (via `clearpath_manipulators_description`).

@@ -60,8 +60,8 @@
 
     <!-- The details the upstream meshes draw in one color: the blue ring at the mounting end, the caps over
          the pivot pins where the arms meet the finger tip, and the covers on the finger arms, the last two in the
-         grip pads' gray.  scripts/rg6_details_mesh.py writes them from the owner's detailed RG6 model, each in the
-         frame of the link it rides on (2026-10-10).  No <material>: the DAE carries its own color, and
+         grip pads' gray.  rg6_details_mesh.py (tools 5642307) wrote them from the owner's detailed RG6 model,
+         each in the frame of the link it rides on (2026-10-10).  No <material>: the DAE carries its own color, and
          RViz, Foxglove and clair.twin.collada take it from there, while a URDF material would paint the mesh over.
          No <collision>.  The ring, the caps and the inlay lie inside the convex hull of their link's collision mesh
          or at most 0.21 mm outside it (2026-10-10), so a body of their own would give the planner nothing.  The
