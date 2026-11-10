@@ -10,7 +10,6 @@ out lies INSIDE it.
 
 from __future__ import annotations
 
-import importlib.machinery
 import importlib.util
 import sys
 import xml.etree.ElementTree as ET
@@ -19,10 +18,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-_TOOL = Path(__file__).resolve().parent.parent / "src/rg6_control/scripts/rg6_moveit_patch"
-_spec = importlib.util.spec_from_loader(
-    "rg6_moveit_patch", importlib.machinery.SourceFileLoader("rg6_moveit_patch", str(_TOOL))
-)
+_TOOL = Path(__file__).resolve().parent.parent / "src/rg6_control/scripts/rg6_moveit_patch.py"
+_spec = importlib.util.spec_from_file_location("rg6_moveit_patch", _TOOL)
 patch = importlib.util.module_from_spec(_spec)
 sys.modules["rg6_moveit_patch"] = patch
 _spec.loader.exec_module(patch)

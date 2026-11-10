@@ -174,9 +174,12 @@ SRDF_FRAGMENT_TEMPLATE = """\
         <joint name="{prefix}gripper_finger_2_truss_arm_joint"/>
         <joint name="{prefix}gripper_finger_2_finger_tip_joint"/>
     </group>
-    <disable_collisions link1="{prefix}gripper_finger_1_moment_arm" link2="{prefix}gripper_finger_1_finger_tip" reason="Default"/>
-    <disable_collisions link1="{prefix}gripper_finger_2_moment_arm" link2="{prefix}gripper_finger_2_finger_tip" reason="Default"/>
-    <disable_collisions link1="{prefix}gripper_finger_1_flex_finger" link2="{prefix}gripper_finger_2_flex_finger" reason="User"/>
+    <disable_collisions link1="{prefix}gripper_finger_1_moment_arm" link2="{prefix}gripper_finger_1_finger_tip"
+                        reason="Default"/>
+    <disable_collisions link1="{prefix}gripper_finger_2_moment_arm" link2="{prefix}gripper_finger_2_finger_tip"
+                        reason="Default"/>
+    <disable_collisions link1="{prefix}gripper_finger_1_flex_finger" link2="{prefix}gripper_finger_2_flex_finger"
+                        reason="User"/>
     <group_state name="open" group="{gripper_group}">
         <joint name="{prefix}finger_joint" value="{angle_open}"/>
     </group_state>
@@ -243,8 +246,11 @@ def resolve_open_angle(explicit_config=None):
     """
     path = find_model_config(explicit_config)
     if path is None:
-        log(f"WARN: {explicit_config or MODEL_CONFIG_RELPATH} not found (rg6_description not installed, "
-            f"AMENT_PREFIX_PATH empty?) - group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        log(
+            f"WARN: {explicit_config or MODEL_CONFIG_RELPATH} not found (rg6_description not installed, "
+            f"AMENT_PREFIX_PATH empty?) - group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.",
+            err=True,
+        )
         return OPEN_ANGLE_FALLBACK
     try:
         import yaml
@@ -253,12 +259,17 @@ def resolve_open_angle(explicit_config=None):
             limit = (yaml.safe_load(f) or {}).get("limit") or {}
         lower = float(limit["lower"])
     except ImportError:
-        log(f"WARN: PyYAML is missing (apt: python3-yaml) - {path} not read, "
-            f"group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        log(
+            f"WARN: PyYAML is missing (apt: python3-yaml) - {path} not read, "
+            f"group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.",
+            err=True,
+        )
         return OPEN_ANGLE_FALLBACK
     except (OSError, KeyError, TypeError, ValueError) as e:
-        log(f"WARN: no usable limit.lower in {path} ({e}) - "
-            f"group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        log(
+            f"WARN: no usable limit.lower in {path} ({e}) - group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.",
+            err=True,
+        )
         return OPEN_ANGLE_FALLBACK
     log(f"group_state 'open' = {lower!r} rad, the joint's lower limit from {path}.")
     return repr(lower)
@@ -295,8 +306,7 @@ def atomic_write(path, content):
 def patch_srdf(path, args):
     """Inserts the RG6 block (marker-framed) before </robot>, or refreshes it."""
     if not os.path.isfile(path):
-        log(f"WARN: SRDF not found, skipped: {path} "
-            "(did generate_semantic_description run?)", err=True)
+        log(f"WARN: SRDF not found, skipped: {path} (did generate_semantic_description run?)", err=True)
         return False
 
     with open(path) as f:
@@ -336,8 +346,7 @@ def patch_srdf(path, args):
     # Avoid duplicates: the group may only come from our own block.
     groups = [g.get("name") for g in root.findall("group")]
     if groups.count(args.gripper_group) > 1:
-        log(f"ERROR: group '{args.gripper_group}' appears more than once in the SRDF - nothing changed.",
-            err=True)
+        log(f"ERROR: group '{args.gripper_group}' appears more than once in the SRDF - nothing changed.", err=True)
         return False
 
     atomic_write(path, new_content)
@@ -361,8 +370,7 @@ def verify_moveit_yaml(path, args):
     try:
         import yaml
     except ImportError:
-        log("WARN: PyYAML is missing (apt: python3-yaml) - moveit.yaml not checked.",
-            err=True)
+        log("WARN: PyYAML is missing (apt: python3-yaml) - moveit.yaml not checked.", err=True)
         return True
 
     if not os.path.isfile(path):
@@ -382,8 +390,7 @@ def verify_moveit_yaml(path, args):
             params = ns_val["move_group"].get("ros__parameters")
             break
     if not isinstance(params, dict):
-        log("WARN: no move_group.ros__parameters in moveit.yaml, not checked.",
-            err=True)
+        log("WARN: no move_group.ros__parameters in moveit.yaml, not checked.", err=True)
         return True
 
     driver_joint = f"{args.prefix}finger_joint"
@@ -394,71 +401,88 @@ def verify_moveit_yaml(path, args):
         missing.append("moveit_simple_controller_manager")
     else:
         if args.controller_name not in (mscm.get("controller_names") or []):
-            missing.append(f"moveit_simple_controller_manager.controller_names[]"
-                           f" -> {args.controller_name}")
+            missing.append(f"moveit_simple_controller_manager.controller_names[] -> {args.controller_name}")
         block = mscm.get(args.controller_name)
         if not isinstance(block, dict):
             missing.append(f"moveit_simple_controller_manager.{args.controller_name}")
         elif block.get("type") != "GripperCommand":
-            missing.append(f"{args.controller_name}.type == GripperCommand "
-                           f"(is: {block.get('type')!r})")
+            missing.append(f"{args.controller_name}.type == GripperCommand (is: {block.get('type')!r})")
 
     limits = (params.get("robot_description_planning") or {}).get("joint_limits") or {}
     if driver_joint not in limits:
         missing.append(f"robot_description_planning.joint_limits.{driver_joint}")
 
     if missing:
-        log("ERROR: the MoveIt gripper values are missing from the generated moveit.yaml:",
-            err=True)
+        log("ERROR: the MoveIt gripper values are missing from the generated moveit.yaml:", err=True)
         for item in missing:
             log(f"  missing: {item}", err=True)
-        log("They come from robot.yaml -> manipulators.moveit.ros_parameters."
+        log(
+            "They come from robot.yaml -> manipulators.moveit.ros_parameters."
             "move_group (SSOT: husky-custom-setup). An outdated robot.yaml in the "
-            "container (ROBOT_YAML_URL) or under /etc/clearpath?", err=True)
+            "container (ROBOT_YAML_URL) or under /etc/clearpath?",
+            err=True,
+        )
         return False
 
-    log(f"moveit.yaml: the gripper values from robot.yaml are present "
-        f"({args.controller_name}, joint_limits.{driver_joint}).")
+    log(
+        f"moveit.yaml: the gripper values from robot.yaml are present "
+        f"({args.controller_name}, joint_limits.{driver_joint})."
+    )
     return True
 
 
 def build_parser():
     """The command line, on its own so that the tests can ask for the same defaults the call sites get."""
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--setup-path", default="/etc/clearpath",
-                        help="Clearpath setup directory (default: /etc/clearpath)")
-    parser.add_argument("--prefix", default="rg6_",
-                        help="joint/link prefix of the gripper model (default: rg6_)")
-    parser.add_argument("--gripper-group", default="gripper",
-                        help="name of the MoveIt gripper group (default: gripper)")
-    parser.add_argument("--parent-group", default="arm_0",
-                        help="MoveIt planning group the EE is bound to as its parent "
-                             "group (default: arm_0)")
-    parser.add_argument("--parent-link", default="arm_0_wrist_3_link",
-                        help="parent link of the EE - MUST be a member of parent_group "
-                             "(default: arm_0_wrist_3_link; NOT arm_0_tool0, because "
-                             "tool0 is no member of the joint-based arm_0 group)")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument(
+        "--setup-path", default="/etc/clearpath", help="Clearpath setup directory (default: /etc/clearpath)"
+    )
+    parser.add_argument("--prefix", default="rg6_", help="joint/link prefix of the gripper model (default: rg6_)")
+    parser.add_argument(
+        "--gripper-group", default="gripper", help="name of the MoveIt gripper group (default: gripper)"
+    )
+    parser.add_argument(
+        "--parent-group",
+        default="arm_0",
+        help="MoveIt planning group the EE is bound to as its parent group (default: arm_0)",
+    )
+    parser.add_argument(
+        "--parent-link",
+        default="arm_0_wrist_3_link",
+        help="parent link of the EE - MUST be a member of parent_group "
+        "(default: arm_0_wrist_3_link; NOT arm_0_tool0, because "
+        "tool0 is no member of the joint-based arm_0 group)",
+    )
     # Neither end value is estimated: 'close' comes from the linkage kinematics of the rg6_v2
     # (finger_kinematics.hpp, produced by scripts/derive_finger_kinematics.py), 'open' out of the joint limit in
     # rg6_v2.yaml.  Estimated end values bake a half-open and a not-quite-closed hand into the SRDF group states
     # "open"/"close" -- and an 'open' below the limit bakes in a posture MoveIt refuses outright.
-    parser.add_argument("--model-config", default=None,
-                        help="rg6_description's config/rg6_v2.yaml, the source of the 'open' angle "
-                             "(default: found next to this script or on AMENT_PREFIX_PATH)")
-    parser.add_argument("--angle-open", default=None,
-                        help="rg6_finger_joint angle 'open' -- the mechanical open stop of the hand, 151.1 mm "
-                             "wide (default: limit.lower from rg6_v2.yaml, 0.038; NOT the geometric zero of the "
-                             "four-bar chain, which lies outside the joint limit and is refused by MoveIt)")
-    parser.add_argument("--angle-closed", default="1.25478",
-                        help="rg6_finger_joint angle 'close' -- the narrowest "
-                             "pose, 0.4 mm.  NOT the 1.3 of upstream: "
-                             "there the fingers already pass through one "
-                             "another in the model (default: 1.25478)")
-    parser.add_argument("--controller-name",
-                        default="manipulators/rg6_gripper_controller",
-                        help="MoveIt controller name moveit.yaml is checked against "
-                             "(it is set in robot.yaml, not here)")
+    parser.add_argument(
+        "--model-config",
+        default=None,
+        help="rg6_description's config/rg6_v2.yaml, the source of the 'open' angle "
+        "(default: found next to this script or on AMENT_PREFIX_PATH)",
+    )
+    parser.add_argument(
+        "--angle-open",
+        default=None,
+        help="rg6_finger_joint angle 'open' -- the mechanical open stop of the hand, 151.1 mm "
+        "wide (default: limit.lower from rg6_v2.yaml, 0.038; NOT the geometric zero of the "
+        "four-bar chain, which lies outside the joint limit and is refused by MoveIt)",
+    )
+    parser.add_argument(
+        "--angle-closed",
+        default="1.25478",
+        help="rg6_finger_joint angle 'close' -- the narrowest "
+        "pose, 0.4 mm.  NOT the 1.3 of upstream: "
+        "there the fingers already pass through one "
+        "another in the model (default: 1.25478)",
+    )
+    parser.add_argument(
+        "--controller-name",
+        default="manipulators/rg6_gripper_controller",
+        help="MoveIt controller name moveit.yaml is checked against (it is set in robot.yaml, not here)",
+    )
     return parser
 
 
@@ -474,8 +498,7 @@ def main():
     # robot.yaml (see the module docstring). Exit code 1 instead of silently
     # running without a gripper controller; no abort for the caller, both
     # call sites (installer, offboard entrypoint) only log it.
-    ok = verify_moveit_yaml(
-        os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
+    ok = verify_moveit_yaml(os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
     if not ok:
         # On stdout as well: whoever reads only one stream (docker logs mixes
         # both unsorted) should still see the failure.
