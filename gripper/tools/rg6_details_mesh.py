@@ -15,7 +15,7 @@ every existing mesh, link and joint.
 
 The source is an Onshape glTF export (generator "ONSHAPE BY PTC INC, 1.222", 174 bodies, 7234 primitives, 20.2 M
 triangles, meters), the owner's detailed model of the RG6. It is not committed (OnRobot's CAD, 797 MB, no license
-to redistribute); the owner keeps it untracked at ``onboard/gripper_rg6.gltf`` in the workspace. Each body is one node
+to redistribute); the owner keeps it untracked at ``tools/gripper_rg6.gltf`` in the workspace. Each body is one node
 without a transform, each CAD face one primitive with its own material. The parts are found by their material
 (:data:`RING_SRGB`, :data:`CAP_SRGB`, :data:`COVER_SRGB` -- the covers' glTF colors are grays), and a count other
 than the expected one stops the script.
@@ -51,8 +51,8 @@ finger's plates carry the same gray and are not written, the plates hide them.
 The DAE is written with pycollada directly, ``Z_UP``, in meters, and with a fixed :data:`STAMP`, so a second run on
 the same source writes the same bytes.
 
-    uv run onboard/gripper/tools/rg6_details_mesh.py onboard/gripper_rg6.gltf \\
-        onboard/gripper/src/rg6_description/meshes/rg6_v2/visual
+    uv run tools/gripper/tools/rg6_details_mesh.py tools/gripper_rg6.gltf \\
+        tools/gripper/src/rg6_description/meshes/rg6_v2/visual
 """
 
 from __future__ import annotations
@@ -527,7 +527,7 @@ def write(parts: list[tuple[str, trimesh.Trimesh]], dae_path: Path) -> None:
     dae.assetInfo.created = dae.assetInfo.modified = STAMP
     dae.assetInfo.contributors.append(
         asset.Contributor(
-            authoring_tool="onboard/gripper/tools/rg6_details_mesh.py",
+            authoring_tool="tools/gripper/tools/rg6_details_mesh.py",
             source_data="gripper_rg6.gltf (Onshape export of the OnRobot RG6, the owner's, not committed)",
         )
     )

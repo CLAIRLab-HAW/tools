@@ -315,7 +315,7 @@ def box_assembly(xacro: Path, link_name: str, mass_kg: float) -> tuple[np.ndarra
     structure that stands over half a metre tall.  Distributing a mass over the boxes BY VOLUME is not the true
     distribution either, but it is one anybody can check against the numbers in the file.
 
-    That link lives in the NEIGHBOURING package (``onboard/extras``, the a200-0553's URDF extras), which is why this
+    That link lives in the NEIGHBOURING package (``husky/extras``, the a200-0553's URDF extras), which is why this
     mode takes the xacro as an argument instead of knowing a path: it reads boxes out of any link, and the one it
     was written for is not a gripper part.
 

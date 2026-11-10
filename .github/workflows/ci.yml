@@ -1,0 +1,31 @@
+name: ci
+
+# tools on its own: no other repository is checked out.  Tests that compare a file here against a neighboring
+# clearpath repository skip with their cause; the ones that import clearpath packages live there
+# (robot/contract/tests), and clearpath's own CI runs them.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync
+      - run: uv run ruff check --select E9,F63,F7,F82 gripper
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q

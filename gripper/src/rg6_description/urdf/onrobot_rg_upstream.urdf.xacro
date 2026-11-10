@@ -6,7 +6,7 @@
         that one reads "^package://...".  With file:// Foxglove shows the model
         WITHOUT meshes; that was exactly the symptom on the robot.
      2. file://$(find ...) nails the absolute path of the BUILDING machine into
-        the model (/home/robot/onboard/gripper/install/...).  Neither the
+        the model (/home/robot/tools/gripper/install/...).  Neither the
         workstation nor a container nor a replay can resolve it. -->
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="onrobot_rg_macro">
 

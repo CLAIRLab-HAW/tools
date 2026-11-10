@@ -59,6 +59,6 @@ def test_the_bridge_imports_nothing_the_robot_does_not_have():
     ["Rg6Client", "Rg6Error", "await_settled", "FingerKinematics", "status_payload", "finger_angle_to_publish"],
 )
 def test_the_names_other_code_reaches_for_are_there(name: str):
-    """``onboard/setup/tools/rg6_stroke_survey.py`` imports three of these by name, and the container mock
+    """``husky/setup/tools/rg6_stroke_survey.py`` imports three of these by name, and the container mock
     reproduces ``status_payload``'s fields character for character (gripper_control's ``gripper_sim.cpp``)."""
     assert f"def {name}" in BRIDGE.read_text(encoding="utf-8") or f"class {name}" in BRIDGE.read_text(encoding="utf-8")

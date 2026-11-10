@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>tool_description</name>
+  <version>0.1.0</version>
+  <description>
+    The tools both robots carry, as xacro macros hung on any flange face: the OnRobot RG6 with its TCP, and the
+    Rittal key holder.  Where a tool sits is the robot's: the a200-0553's extras hang it on arm_0_tool0, MARWIN 5's
+    on the SmartShift tool holder.
+  </description>
+  <maintainer email="hannes.voss@haw-hamburg.de">Hannes Voss</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- rg6.macro.xacro instantiates rg6_description's hand (tools/gripper). -->
+  <exec_depend>rg6_description</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

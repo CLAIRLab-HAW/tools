@@ -1,4 +1,4 @@
-# onboard/gripper
+# tools/gripper
 
 The hand on the arm's flange, for any **gripper model**: what every model shares, the parts of the models this
 workspace builds itself, and the tools that read a model's numbers off its URDF. Two models today — the **OnRobot RG6**
@@ -32,7 +32,8 @@ workspace's.
   carries. The pads' faces are their link frames (rg6_v2) or the innermost points of their collision meshes (2F-85).
 - **The RG6's own** (`rg6_description`, `rg6_control`): the measured rg6_v2 model, the bridge to the URCap and the
   SRDF patch Clearpath's generator cannot write. Where a hand is mounted on the a200-0553 is not here but in
-  [onboard/extras](../extras/README.md) (`urdf/tools/<tool>.urdf.xacro`).
+  [husky/extras](../../husky/extras/README.md) (`urdf/tools/<tool>.urdf.xacro`, over
+  [tool_description](../description/README.md)'s macro).
 
 ## Tech Stack
 
@@ -118,7 +119,7 @@ through the `source` field in `/motion/result`.
 
 The RG6's node lives here, the service that starts it does not. `rg6_grip_bridge` runs as
 `clearpath-custom-rg6-grip-bridge` — unit, wrapper and the root-owned copy under `/usr/local/bin` come from
-[`onboard/setup`](../setup/), which deploys the file out of this workspace. Command it through the action above;
+[`husky/setup`](../../husky/setup/), which deploys the file out of this workspace. Command it through the action above;
 nothing here is launched by hand.
 
 A 2F-85 on the real robot is NOT brought up yet: its hardware interface (`robotiq_driver`, not part of the image)
@@ -268,9 +269,10 @@ up to 17 mm and is not a second opinion.
 Workspace in `system.ros2.workspaces`, `io_and_status_controller` via
 `robot.yaml` `ros_parameters`. Into the robot's URDF the gripper comes through
 `platform.extras.urdf`, which addresses a file in
-[onboard/extras](../extras/README.md): that one instantiates the macro from
-this package at `arm_0_tool0`. Both workspaces have to be listed, the second one
-expands `$(find rg6_description)`. The gripper publishes joint states on
+[husky/extras](../../husky/extras/README.md): that one hangs
+[tool_description](../description/README.md)'s RG6 macro, over this package's hand, on
+`arm_0_tool0`. All three workspaces have to be listed; the generator expands
+`$(find tool_description)` and `$(find rg6_description)`. The gripper publishes joint states on
 `manipulators/endeffectors/joint_states`.
 
 ## Safety
@@ -297,7 +299,7 @@ they *fail* when a sibling is missing, rather than skipping: that is the case CI
 scripts, and a guard that stops guarding without a word is worse than none.
 
 ```bash
-uv run pytest onboard/gripper    # from the workspace root
+uv run pytest gripper/tests      # from the tools root
 ```
 
 They also come along in the plain root run (`uv run pytest`), which collects
@@ -313,7 +315,7 @@ uv run pytest robot/motion-server/tests/test_offboard_gripper.py    # needs the 
 
 ## Related
 
-- [onboard/setup](../setup/README.md) — `robot.yaml` (SSOT),
+- [husky/setup](../../husky/setup/README.md) — `robot.yaml` (SSOT),
   and the installer + systemd unit that roll out and start `rg6_grip_bridge`
   from this workspace
 - [robot-contract](../../robot/contract/README.md) — the gripper models

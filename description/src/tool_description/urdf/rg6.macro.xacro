@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+  The OnRobot RG6 as a macro, hung on any flange face: the hand from rg6_description plus rg6_hand_tcp, the TCP the
+  whole workspace addresses.  parent is the face the hand's foot sits on: arm_0_tool0 on the a200-0553
+  (husky_extras_description's tools/rg6.urdf.xacro), the SmartShift tool holder's face on MARWIN 5
+  (marwin_extras_description).
+-->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:macro name="rg6_tool" params="parent">
+
+    <!-- ===================== RG6 gripper at ${parent} ===================== -->
+    <!-- The bracket sits directly on the flange, with no mounting offset (observed 2026-08-19).
+         The owner confirmed the half-turn on that date; the opening axis alone cannot distinguish 0 from pi.
+         Refine the rotation against an asymmetric feature such as the cable outlet.
+         rg6_finger_joint is 0 when open and positive when closed; dependent joints use mimic. -->
+    <xacro:include filename="$(find rg6_description)/urdf/onrobot_rg_upstream.urdf.xacro"/>
+    <xacro:onrobot_rg parent="${parent}" prefix="rg6_" model="rg6_v2" driver_joint="rg6_finger_joint">
+      <origin xyz="0 0 0" rpy="0 0 3.14159"/>
+    </xacro:onrobot_rg>
+
+    <!-- R19/R23: the calibrated TCP is 210 mm above the flange, at the start of the pads;
+         grasp_frame is 58.1 mm farther out (2026-08-19). Changing this offset invalidates TCP calibrations. -->
+    <link name="rg6_hand_tcp"/>
+    <joint name="rg6_hand_tcp_joint" type="fixed">
+      <parent link="rg6_gripper_grasp_frame"/><child link="rg6_hand_tcp"/>
+      <origin xyz="0 0 -0.0581" rpy="0 0 0"/>
+    </joint>
+
+  </xacro:macro>
+</robot>

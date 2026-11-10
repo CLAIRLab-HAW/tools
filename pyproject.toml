@@ -1,0 +1,24 @@
+# tools on its own: the tooling the gripper's tests and generators run with.  No distribution lives here -- gripper/
+# and description/ are ROS packages and scripts, and their tests import the scripts beside them through their
+# conftest.py.  `uv sync && uv run ruff check . && uv run pytest` in a fresh clone is the whole check.
+
+[project]
+name = "tools"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.16.5,<0.17",
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+testpaths = ["gripper/tests"]

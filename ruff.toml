@@ -1,0 +1,24 @@
+# tools' ruff configuration: clearpath's rules, kept here so that this repository lints on its own. It is this
+# repository's own and may drift from clearpath's; the reasons behind each code are written down there. Left out: TID251, whose bans point at clair.robot.contract and clair.log, neither of which runs here.
+# It stays in `external` so that its noqa still holds when clearpath's tooling lints these files with its ruff.toml.
+#
+# ruff takes the nearest ruff.toml or pyproject.toml WITH a [tool.ruff] table, so cockpit-diagnostics, an upstream
+# package with its own [tool.ruff], keeps its own rules.
+line-length = 120
+target-version = "py312"
+extend-exclude = [".venv", "build", "dist", "*.egg-info", "node_modules"]
+respect-gitignore = false
+
+[format]
+exclude = ["*.md", "**/*.ipynb"]
+
+[lint]
+select = [
+    "E4", "E7", "E9", "E501", "F", "I", "UP", "B", "D100",
+    "FIX", "LOG", "RUF012", "RUF013", "RUF100", "ASYNC", "S506",
+]
+ignore = ["B905", "ASYNC109"]
+external = ["A002", "BLE001", "C901", "N801", "N802", "S307", "S310", "TID251"]
+
+[lint.isort]
+known-first-party = ["clair"]
