@@ -221,7 +221,7 @@ def test_the_centre_of_gravity_lands_where_the_datasheet_puts_it(repo_root, conf
     lands within a millimetre of the published figure.  It also settles the reading of the data sheet that the mass
     alone leaves open: the bracket is inside the 1.25 kg.
     """
-    bundle = repo_root.parent.parent / "urdf" / "robot.urdf"
+    bundle = repo_root.parent / "urdf" / "robot.urdf"
     if not bundle.is_file():
         pytest.skip(f"no generated bundle at {bundle} -- run urdf/generate.sh")
     parts = {part: dict(values) for part, values in config["inertial"].items()}
