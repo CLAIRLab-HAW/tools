@@ -1,7 +1,7 @@
 """The generator behind all three copies of the linkage table.
 
 ``tools/derive_finger_kinematics.py`` walks the four-bar finger chain out of a GENERATED URDF and samples the joint
-angle -> clear width relation.  ``test_linkage_parity.py`` pins down that its three outputs agree with one another --
+angle -> clear width relation.  clearpath's ``test_gripper_linkage_parity.py`` pins down that its three outputs agree --
 which they would also do if the generator computed the same wrong thing for all of them.  This is the other half: the
 machinery itself.
 

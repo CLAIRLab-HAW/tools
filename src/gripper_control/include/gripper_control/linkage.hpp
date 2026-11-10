@@ -1,8 +1,8 @@
 // A gripper model's linkage: driver joint [rad] <-> clear width between the pads [m], as the TABLE the model file
 // carries (clair.robot.contract, profiles/grippers/<model>.yaml: linkage.table), linearly interpolated.
 //
-// The same interpolation as clair.robot.contract.profile.GripperLinkage, which tests/test_linkage_parity.py holds
-// this header to for every model.  The table, not a crank-rocker formula: a recomputed linkage misses both the width
+// The same interpolation as clair.robot.contract.profile.GripperLinkage, which clearpath's
+// robot/contract/tests/test_gripper_linkage_parity.py holds this header to for every model.  The table, not a crank-rocker formula: a recomputed linkage misses both the width
 // at q=0 (153.2 mm) and the joint limits (0.0 to 1.25478 rad) on the rg6_v2 and thereby puts the gripper into poses
 // that do not exist.
 
