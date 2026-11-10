@@ -280,10 +280,20 @@ def log(msg, err=False):
 
 
 def atomic_write(path, content):
+    """Write ``content`` over ``path``, keeping one backup and never leaving a half-written file.
+
+    The backup is taken ONCE, so a second run cannot overwrite the first generated copy with an already-patched one.
+    A backup that cannot be written does not stop the rewrite -- the fix outranks the undo record, as in husky/setup's
+    patchers: without it MoveIt comes up with no gripper group.
+    """
     backup = path + ".bak"
     if not os.path.exists(backup):
-        shutil.copy2(path, backup)
-        log(f"backup written: {backup}")
+        try:
+            shutil.copy2(path, backup)
+            log(f"backup written: {backup}")
+        except OSError as e:
+            # The write below goes ahead regardless, but without the .bak it cannot be undone -- hence stderr.
+            log(f"no backup of {path}: {e}", err=True)
     dir_name = os.path.dirname(path) or "."
     fd, tmp = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
     try:

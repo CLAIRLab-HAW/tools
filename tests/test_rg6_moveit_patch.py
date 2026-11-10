@@ -117,6 +117,20 @@ def test_a_block_under_another_wording_is_replaced_not_doubled(tmp_path, args):
     assert patch.patch_srdf(str(srdf), args) is False, "a second run changes nothing"
 
 
+def test_a_failed_backup_does_not_stop_the_patch(tmp_path, args, monkeypatch, capsys):
+    """The fix outranks the undo record: without the .bak the diff is gone, without the patch the gripper group."""
+    srdf = tmp_path / "robot.srdf"
+    srdf.write_text(FLAT_SRDF)
+
+    def refuse(src, dst):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(patch.shutil, "copy2", refuse)
+    assert patch.patch_srdf(str(srdf), args) is True
+    assert "no backup" in capsys.readouterr().err
+    assert patch.MARKER_BEGIN in srdf.read_text()
+
+
 def test_an_explicit_angle_still_wins(tmp_path):
     """The argument is the escape hatch for a hand whose stop sits elsewhere; the default may not swallow it."""
     parsed = patch.build_parser().parse_args(["--angle-open", "0.5"])
