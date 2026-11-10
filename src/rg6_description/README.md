@@ -16,4 +16,4 @@ one particular robot — the mounting at `arm_0_tool0`, the alias link
 `rg6_onrobot_rg6_base_link` that `robot.yaml` hangs the camera on, and the
 `rg6_hand_tcp` frame — lives in
 [husky/extras](../../../../husky/extras/README.md), over the RG6 macro in
-[tool_description](../../../description/README.md). Nothing here names a frame of the a200.
+[tool_description](../tool_description/README.md). Nothing here names a frame of the a200.

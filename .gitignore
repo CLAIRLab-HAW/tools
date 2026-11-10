@@ -19,3 +19,7 @@ dist/
 
 # macOS Finder metadata
 .DS_Store
+
+# colcon
+install/
+log/

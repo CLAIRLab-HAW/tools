@@ -29,12 +29,12 @@ origin:
   flex_finger: { x: 0.0098, y: 0.0, z: 0.0218 }
   grasp_frame: { x: 0.0, y: 0.0, z: 0.212 }
 
-# Mass, centre of mass and inertia tensor of every part, DERIVED -- ``tools/derive_link_inertia.py`` integrates each
+# Mass, centre of mass and inertia tensor of every part, DERIVED -- ``scripts/derive_link_inertia.py`` integrates each
 # collision mesh exactly (Eberly, polyhedral mass properties) and hands the parts one homogeneous density, fixed so
 # that the sum over all instances is the data sheet mass of 1,25 kg (OnRobot RG6 manual v6.6.2 §8.3.2, carried in
 # the profile a200_0553.yaml as ``gripper.datasheet.mass_kg``).  Regenerate rather than edit:
 #
-#     python3 tools/derive_link_inertia.py --report --check-cog <workspace>/urdf/robot.urdf
+#     python3 scripts/derive_link_inertia.py --report --check-cog <workspace>/urdf/robot.urdf
 #
 # Homogeneous density is wrong in detail -- the motor is denser than a rubber pad -- and the second data sheet figure
 # says how much it costs: at 1343,1 kg/m^3 the assembly's centre of gravity lands 90,58 mm above the tool base point

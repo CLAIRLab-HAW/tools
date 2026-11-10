@@ -440,7 +440,7 @@ def build_parser():
                              "(default: arm_0_wrist_3_link; NOT arm_0_tool0, because "
                              "tool0 is no member of the joint-based arm_0 group)")
     # Neither end value is estimated: 'close' comes from the linkage kinematics of the rg6_v2
-    # (finger_kinematics.hpp, produced by tools/derive_finger_kinematics.py), 'open' out of the joint limit in
+    # (finger_kinematics.hpp, produced by scripts/derive_finger_kinematics.py), 'open' out of the joint limit in
     # rg6_v2.yaml.  Estimated end values bake a half-open and a not-quite-closed hand into the SRDF group states
     # "open"/"close" -- and an 'open' below the limit bakes in a posture MoveIt refuses outright.
     parser.add_argument("--model-config", default=None,

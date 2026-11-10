@@ -1,6 +1,6 @@
 """The details the macro hangs on as extra visuals: the blue ring, the pivot caps and the covers in the pads' gray.
 
-``tools/rg6_details_mesh.py`` writes them from a glTF that is not in the repo, so these tests cannot regenerate them.
+``scripts/rg6_details_mesh.py`` writes them from a glTF that is not in the repo, so these tests cannot regenerate them.
 They hold what breaks silently instead: a ``_detail`` the macro names without its DAE (RViz draws the hand without it
 and logs one line), and a DAE that lost its color (the visual carries no ``<material>``, so it would turn white).
 """

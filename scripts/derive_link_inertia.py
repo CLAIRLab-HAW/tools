@@ -21,7 +21,7 @@ Both data sheet figures live in ``robot/contract``'s profile (``gripper.datashee
 ``cog_z_m``, OnRobot RG6 operating manual v6.6.2 §8.3.2).  They are handed in here rather than read, so that this
 script keeps working in a checkout that has only this repo.
 
-    python3 tools/derive_link_inertia.py --total-mass-kg 1.25 --report
+    python3 scripts/derive_link_inertia.py --total-mass-kg 1.25 --report
 
 Writes the YAML block on stdout; the report goes to stderr, so a redirect keeps them apart.
 """

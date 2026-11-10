@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             "kommentar": [
                 f"Joint angle {a.driver} [rad] -> clear width between the pad",
                 "faces [m], measured between the two flex_finger meshes.",
-                "GENERATED, not maintained: tools/derive_finger_kinematics.py from the",
+                "GENERATED, not maintained: scripts/derive_finger_kinematics.py from the",
                 "generated URDF.  Regenerate after every change to the gripper model.",
                 "The lower bound is the mechanical open stop; below it the chain",
                 "computes a wider opening than the hardware reaches.",

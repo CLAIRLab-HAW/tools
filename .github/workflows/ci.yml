@@ -26,6 +26,6 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync
-      - run: uv run ruff check --select E9,F63,F7,F82 gripper
+      - run: uv run ruff check --select E9,F63,F7,F82 src scripts tests
       - run: uv run ruff format --check .
       - run: uv run pytest -q

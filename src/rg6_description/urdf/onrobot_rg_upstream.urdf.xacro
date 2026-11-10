@@ -6,7 +6,7 @@
         that one reads "^package://...".  With file:// Foxglove shows the model
         WITHOUT meshes; that was exactly the symptom on the robot.
      2. file://$(find ...) nails the absolute path of the BUILDING machine into
-        the model (/home/robot/tools/gripper/install/...).  Neither the
+        the model (/home/robot/tools/install/...).  Neither the
         workstation nor a container nor a replay can resolve it. -->
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="onrobot_rg_macro">
 
@@ -60,7 +60,7 @@
 
     <!-- The details the upstream meshes draw in one color: the blue ring at the mounting end, the caps over
          the pivot pins where the arms meet the finger tip, and the covers on the finger arms, the last two in the
-         grip pads' gray.  tools/rg6_details_mesh.py writes them from the owner's detailed RG6 model, each in the
+         grip pads' gray.  scripts/rg6_details_mesh.py writes them from the owner's detailed RG6 model, each in the
          frame of the link it rides on (2026-10-10).  No <material>: the DAE carries its own color, and
          RViz, Foxglove and clair.twin.collada take it from there, while a URDF material would paint the mesh over.
          No <collision>.  The ring, the caps and the inlay lie inside the convex hull of their link's collision mesh
