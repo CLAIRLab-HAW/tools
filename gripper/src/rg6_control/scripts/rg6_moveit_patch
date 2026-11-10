@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+"""rg6_moveit_patch: makes the OnRobot RG6 usable in the Clearpath MoveIt config.
+
+The Clearpath generator knows no OnRobot gripper (robot.yaml has no lever for
+it), but regenerates robot.srdf + moveit.yaml on every boot. This tool
+therefore patches AFTER the generation (idempotent, .bak, atomic - the style of
+clearpath-custom-setup.py):
+
+  1. <setup>/robot.srdf                       (the SRDF loaded by moveit.launch.py
+     and produced by the moveit_collision_updater; the RG6 collision pairs are
+     already in there, because the updater sees the full URDF including
+     platform.extras):
+       + planning group 'gripper' (driver joint rg6_finger_joint) WITH the
+         5 dependent joints as <joint> in the group. Together with the
+         URDF <mimic> (rg6_description) they are derived as mimic_joints_ from
+         finger_joint -> a clean preview of opening/closing, without being
+         actively planned (the active DOF stays 1).
+       + group_states 'open'/'close'. The angle of 'open' is the driver
+         joint's OWN lower limit, read from rg6_description's
+         config/rg6_v2.yaml: that limit is the mechanical open stop of the
+         hand (0.038 rad = 151.1 mm), not the geometric zero of the four-bar
+         chain, and a named posture outside the limits of the joint it is
+         defined on is refused by MoveIt with "Goal state is out of bounds!".
+       + end_effector 'rg6' parent_group arm_0, parent_link arm_0_wrist_3_link
+         (the deepest arm_0 member; tool0 is not an arm_0 member, see the
+         comment at SRDF_FRAGMENT_TEMPLATE)
+       + EXACTLY THREE <disable_collisions>: moment_arm<->finger_tip per finger,
+       and flex_finger<->flex_finger between the fingers. Only these three: with
+       the rg6_v2 model the moveit_collision_updater produces 82 gripper pairs
+       itself and names them correctly, but NOT these three -- the first two
+       because they are in contact over the whole stroke, the third because it
+       is in contact only in the last 1,3 % of the stroke (see the comment at
+       SRDF_FRAGMENT_TEMPLATE).
+  2. <setup>/manipulators/config/moveit.yaml is NOT patched, only
+     CHECKED. Both entries live in robot.yaml under
+     manipulators.moveit.ros_parameters.move_group, and the Clearpath
+     generator writes them into moveit.yaml itself (deep merge, verified
+     empirically -- see the CHANGELOG):
+       + moveit_simple_controller_manager: GripperCommand controller
+         'manipulators/rg6_gripper_controller' (action_ns gripper_cmd) ->
+         served by rg6_grip_bridge on the robot, by gripper_sim in the mock
+         (both under the same name rg6_gripper_controller/gripper_cmd)
+       + robot_description_planning.joint_limits.rg6_finger_joint
+         (acceleration limit for the TOTG time parameterisation)
+     The reason for the move: robot.yaml is the versioned SSOT (husky-custom-
+     setup) and holds for the robot AND the offboard container at the same
+     time; the SRDF part, by contrast, has no lever in robot.yaml
+     (clearpath_config does not know the word 'srdf', and Gripper.MODEL is a
+     closed enum without the RG6).
+     verify_moveit_yaml acknowledges with exit code 1 when the values are
+     missing -- otherwise an outdated robot.yaml only shows up once MoveIt can
+     no longer command the gripper.
+
+Invocations:
+  Robot:    from clearpath-custom-setup.py (per boot, before clearpath-manipulators)
+  Offboard: offboard entrypoint.sh after the generate_* runs
+  Manual:   rg6_moveit_patch --setup-path /etc/clearpath
+
+Self-contained: needs only python3 + PyYAML (no ROS environment).
+"""
+
+import argparse
+import os
+import re
+import shutil
+import sys
+import tempfile
+import xml.etree.ElementTree as ET
+
+TAG = "rg6_moveit_patch"
+
+MARKER_BEGIN = "<!-- onrobot-rg6:BEGIN (rg6_moveit_patch; do not edit by hand) -->"
+MARKER_END = "<!-- onrobot-rg6:END -->"
+#: Our block, found by its tag and not by the prose after it: the a200's SRDF carried the same block under a
+#: German wording of that prose on 2026-09-29, and matching the whole marker made every boot append a second
+#: gripper group and give up.
+BLOCK_RX = re.compile(r"[ \t]*<!-- onrobot-rg6:BEGIN\b.*?-->.*?" + re.escape(MARKER_END) + r"\n?", re.DOTALL)
+
+# The driver joint's limits are DATA (rg6_description/config/rg6_v2.yaml), and the SRDF posture "open" has to be
+# the same number as the URDF limit it is measured against: MoveIt validates a named group_state against the joint
+# limits of the model and refuses anything outside them with "Goal state is out of bounds!" -- measured 2026-08-28
+# on every MoveIt Task Constructor grasp of the a200-0553 (28, 32, 37 and 28 valid IK solutions, none of them
+# connectable). Hence the config rather than a literal here: two places holding the open stop is one place too
+# many, and the joint limit is the one the planner actually reads.
+MODEL_CONFIG_RELPATH = os.path.join("rg6_description", "config", "rg6_v2.yaml")
+
+# Last resort when the config above is not findable and when PyYAML is missing. It is a second literal, and it is
+# pinned to the first one by tests/test_rg6_moveit_patch.py, so it cannot drift away unnoticed. Falling back to the
+# geometric zero of the chain instead would put back exactly the pose MoveIt refuses -- a fallback that
+# reintroduces the fault is not one.
+OPEN_ANGLE_FALLBACK = "0.038"
+
+# Second marker block: disables all intra-gripper self-collision pairs so that
+# MoveIt can plan with articulated finger collision geometries. Without this
+# block the four-bar linkage loop, the camera-on-gripper-base mount and the
+# finger tips against each other would block planning as self-collisions (that
+# was the historical reason for modelling the gripper without collision as
+# 'display only'). Runs AFTER the moveit_collision_updater, which regenerates
+# /clearpath/robot.srdf on every start (with finger pairs, as soon as the
+# fingers have collision geometry). Against the WORLD (table, object, other arm
+# links) the gripper is still checked - only the intra-assembly pairs fall away.
+# Has to match rg6_control/rg6_joint_state_broadcaster (0 = open, + = closed)
+# and the joint names from rg6_description (prefix 'rg6_').
+#
+# The 5 dependent joints stand as <joint> IN the gripper group, not as
+# top-level <passive_joint>: in addJointModelGroup MoveIt takes ONLY explicitly
+# listed joints/links/chains/subgroups into the group - there is NO auto-add of
+# mimic dependants. Only as a group member are they classified by the
+# JointModelGroup constructor, on the basis of the URDF <mimic>
+# (getMimic()!=nullptr), as mimic_joints_ -> not actively planned (the active
+# DOF stays 1 = {prefix}finger_joint, the GripperCommand controller unchanged),
+# BUT part of the planning trajectory and derived from finger_joint via
+# group_mimic_update_ -> a clean animation of all 6 joints in the MoveIt
+# planning preview. Without including them, MoveIt animates only
+# rg6_finger_joint ("only one finger moves").
+# THE THREE disable_collisions PAIRS, and why it is exactly these.
+#
+# The moveit_collision_updater samples poses and disables what it sees touching
+# while doing so. For the rg6_v2 model it delivers 82 gripper pairs -- among
+# them almost all cross pairs finger 1 <-> finger 2 and the direct neighbours
+# moment_arm<->truss_arm and finger_tip<->truss_arm as "Adjacent". NOT among
+# them: moment_arm<->finger_tip of the SAME finger, and the single cross pair
+# flex_finger<->flex_finger.
+#
+# In the four-bar chain moment_arm -> truss_arm -> finger_tip these two links
+# are two joints apart and still permanently in contact. Measured on
+# 2026-08-19 on the running move_group over the whole stroke
+# (check_state_validity, rg6_finger_joint 0,0 to 1,25478): in EVERY pose two
+# contacts, always this pair. The consequence was not a worse plan but NO plan
+# at all:
+#
+#   ERROR move_group  PlanningRequestAdapter 'CheckStartStateCollision' failed,
+#   because '2 contact(s) detected : rg6_gripper_finger_1_finger_tip -
+#   rg6_gripper_finger_1_moment_arm, ...'. Aborting planning pipeline.
+#
+# reason="Default" instead of "Adjacent": the two links are not neighbours in
+# the URDF. "Default" is the category for "touch each other in the default
+# pose", and that applies here -- in every pose.
+#
+# THE THIRD PAIR: flex_finger <-> flex_finger, the two rubber pads.
+#
+# It is missing for the opposite reason. The pads touch ONLY at the very end of
+# the stroke, and the updater's sampling practically never lands there -- to it
+# the pair is "sometimes in collision" and stays active. Measured on 2026-08-20
+# on the running move_group (check_state_validity, bisection):
+#
+#   last valid pose           1,238486 rad  ->  3,01 mm clear width
+#   first colliding           1,238486 rad
+#   contact band              0,016294 rad  =  1,3 % of the stroke
+#
+# The stroke goes from 151,13 mm at the open stop (q = 0,038) to 0,40 mm
+# (closed). So as long as the
+# pair was active, move_group refused EVERY pose narrower than 3 mm -- while
+# the same SRDF offered a group_state "close" at 1,25478 rad. The model
+# forbade its own named state, and nothing thinner than 3 mm was graspable.
+#
+# Released rather than "close" defused, because the self-collision check is
+# meant to protect the robot from itself: a gripper closing on nothing is the
+# normal case the hardware performs on every grasp, and the two pads ARE the
+# gripping faces. That they meet at a 0,4 mm gap is the closed gripper and no
+# self-collision. The real end stop remains the joint limit (1,25478 rad); the
+# release changes nothing about that.
+#
+# reason="User": neither "Adjacent" (not neighbours in the URDF) nor "Default"
+# (in the default pose they stand 153 mm apart) applies. "User" is the category
+# for a deliberate release, and that is exactly what this is.
+#
+SRDF_FRAGMENT_TEMPLATE = """\
+    <group name="{gripper_group}">
+        <joint name="{prefix}finger_joint"/>
+        <joint name="{prefix}finger_joint_mirror"/>
+        <joint name="{prefix}gripper_finger_1_truss_arm_joint"/>
+        <joint name="{prefix}gripper_finger_1_finger_tip_joint"/>
+        <joint name="{prefix}gripper_finger_2_truss_arm_joint"/>
+        <joint name="{prefix}gripper_finger_2_finger_tip_joint"/>
+    </group>
+    <disable_collisions link1="{prefix}gripper_finger_1_moment_arm" link2="{prefix}gripper_finger_1_finger_tip" reason="Default"/>
+    <disable_collisions link1="{prefix}gripper_finger_2_moment_arm" link2="{prefix}gripper_finger_2_finger_tip" reason="Default"/>
+    <disable_collisions link1="{prefix}gripper_finger_1_flex_finger" link2="{prefix}gripper_finger_2_flex_finger" reason="User"/>
+    <group_state name="open" group="{gripper_group}">
+        <joint name="{prefix}finger_joint" value="{angle_open}"/>
+    </group_state>
+    <group_state name="close" group="{gripper_group}">
+        <joint name="{prefix}finger_joint" value="{angle_closed}"/>
+    </group_state>
+    <end_effector name="rg6" parent_link="{parent_link}" parent_group="{parent_group}" group="{gripper_group}"/>"""
+# parent_link = arm_0_wrist_3_link (NOT arm_0_tool0) + an explicit
+# parent_group="arm_0". Reason: moveit_core::RobotModel::buildGroupsInfoEndEffectors
+# demands hasLinkModel(parent_link) on parent_group for the EE parent group.
+# Clearpath's arm_0 is joint-based (6 UR joints shoulder_pan..wrist_3); its
+# member links reach up to arm_0_wrist_3_link. arm_0_tool0 (and flange) are fixed
+# child links of wrist_3_link BEYOND the last joint -> NOT members of arm_0 (nor
+# of any other group). Consequences:
+#   * parent_link=arm_0_tool0 WITHOUT parent_group  -> possible_parent_groups empty
+#     -> WARN "Could not identify parent group for end-effector 'rg6'",
+#        setEndEffectorParent("", ...) -> gripper not attached to arm_0.
+#   * parent_link=arm_0_tool0 WITH parent_group=arm_0 -> ERROR
+#     "Group 'arm_0' ... does not include the parent link 'arm_0_tool0'".
+# arm_0_wrist_3_link is the deepest link IN arm_0 and a URDF ancestor of the
+# gripper -> both go away, and arm_0.attachEndEffector('rg6') is called.
+# wrist_3_link vs tool0 differ only by the fixed flange transform; gripper poses
+# and IK run over the full kinematic tree resp. the gripper TCP -> no effect.
+
+
+def find_model_config(explicit=None):
+    """Path of rg6_description's config/rg6_v2.yaml, or None when it is nowhere to be found.
+
+    AMENT_PREFIX_PATH is asked first but only asked: the offboard entrypoint sources the rg6 overlay in a SUBSHELL
+    around the generator run and calls this tool outside it, so the variable does not necessarily carry the
+    package at the moment this runs. The three guesses after it cover the layouts this file itself lies in -- the
+    checkout, colcon's isolated install space (which /opt/onrobot-rg6 is) and a merged one.
+    """
+    if explicit:
+        return explicit if os.path.isfile(explicit) else None
+
+    here = os.path.dirname(os.path.realpath(__file__))
+    candidates = [
+        os.path.join(prefix, "share", MODEL_CONFIG_RELPATH)
+        for prefix in (os.environ.get("AMENT_PREFIX_PATH") or "").split(os.pathsep)
+        if prefix
+    ]
+    candidates += [
+        # checkout:         src/rg6_control/scripts/rg6_moveit_patch
+        os.path.join(here, "..", "..", MODEL_CONFIG_RELPATH),
+        # merged install:   <install>/lib/rg6_control/rg6_moveit_patch
+        os.path.join(here, "..", "..", "share", MODEL_CONFIG_RELPATH),
+        # isolated install: <install>/rg6_control/lib/rg6_control/rg6_moveit_patch
+        os.path.join(here, "..", "..", "..", "rg6_description", "share", MODEL_CONFIG_RELPATH),
+    ]
+    for candidate in candidates:
+        path = os.path.normpath(candidate)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def resolve_open_angle(explicit_config=None):
+    """The angle for the group_state "open": limit.lower of the driver joint, as a string for the SRDF.
+
+    :param explicit_config: path given on the command line; the search of ``find_model_config`` when None.
+    :returns: the value as it goes into the SRDF -- ``OPEN_ANGLE_FALLBACK`` with a warning when the config
+        cannot be read, never the geometric zero.
+    """
+    path = find_model_config(explicit_config)
+    if path is None:
+        log(f"WARN: {explicit_config or MODEL_CONFIG_RELPATH} not found (rg6_description not installed, "
+            f"AMENT_PREFIX_PATH empty?) - group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        return OPEN_ANGLE_FALLBACK
+    try:
+        import yaml
+
+        with open(path) as f:
+            limit = (yaml.safe_load(f) or {}).get("limit") or {}
+        lower = float(limit["lower"])
+    except ImportError:
+        log(f"WARN: PyYAML is missing (apt: python3-yaml) - {path} not read, "
+            f"group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        return OPEN_ANGLE_FALLBACK
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        log(f"WARN: no usable limit.lower in {path} ({e}) - "
+            f"group_state 'open' falls back to {OPEN_ANGLE_FALLBACK}.", err=True)
+        return OPEN_ANGLE_FALLBACK
+    log(f"group_state 'open' = {lower!r} rad, the joint's lower limit from {path}.")
+    return repr(lower)
+
+
+def log(msg, err=False):
+    print(f"{TAG}: {msg}", file=(sys.stderr if err else sys.stdout), flush=True)
+
+
+def atomic_write(path, content):
+    backup = path + ".bak"
+    if not os.path.exists(backup):
+        shutil.copy2(path, backup)
+        log(f"backup written: {backup}")
+    dir_name = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        shutil.copymode(path, tmp)
+        # The file keeps its owner: written as root (the installer's run), a root-owned robot.srdf is one the
+        # Clearpath generator, running as the robot user, can no longer replace at boot (2026-10-07).
+        st = os.stat(path)
+        if os.geteuid() == 0:
+            os.chown(tmp, st.st_uid, st.st_gid)
+        os.replace(tmp, path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+# --------------------------- SRDF ------------------------------------------
+def patch_srdf(path, args):
+    """Inserts the RG6 block (marker-framed) before </robot>, or refreshes it."""
+    if not os.path.isfile(path):
+        log(f"WARN: SRDF not found, skipped: {path} "
+            "(did generate_semantic_description run?)", err=True)
+        return False
+
+    with open(path) as f:
+        content = f.read()
+
+    fragment = SRDF_FRAGMENT_TEMPLATE.format(
+        gripper_group=args.gripper_group,
+        prefix=args.prefix,
+        angle_open=args.angle_open,
+        angle_closed=args.angle_closed,
+        parent_link=args.parent_link,
+        parent_group=args.parent_group,
+    )
+    block = f"    {MARKER_BEGIN}\n{fragment}\n    {MARKER_END}\n"
+
+    if BLOCK_RX.search(content):
+        # replace an existing block (update capability)
+        new_content = BLOCK_RX.sub(block, content)
+        if new_content == content:
+            log(f"SRDF: the RG6 block is already up to date ({path}).")
+            return False
+        action = "refreshed"
+    else:
+        idx = content.rfind("</robot>")
+        if idx < 0:
+            log(f"WARN: SRDF without </robot>?! skipped: {path}", err=True)
+            return False
+        new_content = content[:idx] + block + content[idx:]
+        action = "inserted"
+
+    # Make sure it is well-formed before anything is written.
+    try:
+        root = ET.fromstring(new_content)
+    except ET.ParseError as e:
+        log(f"ERROR: the patched SRDF is not well-formed ({e}) - nothing changed.", err=True)
+        return False
+    # Avoid duplicates: the group may only come from our own block.
+    groups = [g.get("name") for g in root.findall("group")]
+    if groups.count(args.gripper_group) > 1:
+        log(f"ERROR: group '{args.gripper_group}' appears more than once in the SRDF - nothing changed.",
+            err=True)
+        return False
+
+    atomic_write(path, new_content)
+    log(f"SRDF: RG6 group/EE {action} ({path}).")
+    return True
+
+
+# --------------------------- moveit.yaml ------------------------------------
+def verify_moveit_yaml(path, args):
+    """Check (do NOT patch) whether robot.yaml has delivered the MoveIt gripper values.
+
+    Both entries come from robot.yaml through the Clearpath generator.
+    If one of them drops out -- an old robot.yaml, a mistyped key, a
+    generator without the merge --, then move_group starts without complaint
+    and the gripper can only be recognised as missing once a GripperCommand
+    goal runs into the void. This check turns that into a visible message.
+
+    :returns: True = everything is there, False = something is missing
+        (the caller then exits with code 1).
+    """
+    try:
+        import yaml
+    except ImportError:
+        log("WARN: PyYAML is missing (apt: python3-yaml) - moveit.yaml not checked.",
+            err=True)
+        return True
+
+    if not os.path.isfile(path):
+        log(f"WARN: moveit.yaml not found, not checked: {path}", err=True)
+        return True
+
+    with open(path) as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        log(f"WARN: {path} has an unexpected format, not checked.", err=True)
+        return True
+
+    # top level = the namespace key (e.g. 'a200_0553') -> move_group.ros__parameters
+    params = None
+    for ns_val in data.values():
+        if isinstance(ns_val, dict) and "move_group" in ns_val:
+            params = ns_val["move_group"].get("ros__parameters")
+            break
+    if not isinstance(params, dict):
+        log("WARN: no move_group.ros__parameters in moveit.yaml, not checked.",
+            err=True)
+        return True
+
+    driver_joint = f"{args.prefix}finger_joint"
+    missing = []
+
+    mscm = params.get("moveit_simple_controller_manager")
+    if not isinstance(mscm, dict):
+        missing.append("moveit_simple_controller_manager")
+    else:
+        if args.controller_name not in (mscm.get("controller_names") or []):
+            missing.append(f"moveit_simple_controller_manager.controller_names[]"
+                           f" -> {args.controller_name}")
+        block = mscm.get(args.controller_name)
+        if not isinstance(block, dict):
+            missing.append(f"moveit_simple_controller_manager.{args.controller_name}")
+        elif block.get("type") != "GripperCommand":
+            missing.append(f"{args.controller_name}.type == GripperCommand "
+                           f"(is: {block.get('type')!r})")
+
+    limits = (params.get("robot_description_planning") or {}).get("joint_limits") or {}
+    if driver_joint not in limits:
+        missing.append(f"robot_description_planning.joint_limits.{driver_joint}")
+
+    if missing:
+        log("ERROR: the MoveIt gripper values are missing from the generated moveit.yaml:",
+            err=True)
+        for item in missing:
+            log(f"  missing: {item}", err=True)
+        log("They come from robot.yaml -> manipulators.moveit.ros_parameters."
+            "move_group (SSOT: husky-custom-setup). An outdated robot.yaml in the "
+            "container (ROBOT_YAML_URL) or under /etc/clearpath?", err=True)
+        return False
+
+    log(f"moveit.yaml: the gripper values from robot.yaml are present "
+        f"({args.controller_name}, joint_limits.{driver_joint}).")
+    return True
+
+
+def build_parser():
+    """The command line, on its own so that the tests can ask for the same defaults the call sites get."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--setup-path", default="/etc/clearpath",
+                        help="Clearpath setup directory (default: /etc/clearpath)")
+    parser.add_argument("--prefix", default="rg6_",
+                        help="joint/link prefix of the gripper model (default: rg6_)")
+    parser.add_argument("--gripper-group", default="gripper",
+                        help="name of the MoveIt gripper group (default: gripper)")
+    parser.add_argument("--parent-group", default="arm_0",
+                        help="MoveIt planning group the EE is bound to as its parent "
+                             "group (default: arm_0)")
+    parser.add_argument("--parent-link", default="arm_0_wrist_3_link",
+                        help="parent link of the EE - MUST be a member of parent_group "
+                             "(default: arm_0_wrist_3_link; NOT arm_0_tool0, because "
+                             "tool0 is no member of the joint-based arm_0 group)")
+    # Neither end value is estimated: 'close' comes from the linkage kinematics of the rg6_v2
+    # (finger_kinematics.hpp, produced by tools/derive_finger_kinematics.py), 'open' out of the joint limit in
+    # rg6_v2.yaml.  Estimated end values bake a half-open and a not-quite-closed hand into the SRDF group states
+    # "open"/"close" -- and an 'open' below the limit bakes in a posture MoveIt refuses outright.
+    parser.add_argument("--model-config", default=None,
+                        help="rg6_description's config/rg6_v2.yaml, the source of the 'open' angle "
+                             "(default: found next to this script or on AMENT_PREFIX_PATH)")
+    parser.add_argument("--angle-open", default=None,
+                        help="rg6_finger_joint angle 'open' -- the mechanical open stop of the hand, 151.1 mm "
+                             "wide (default: limit.lower from rg6_v2.yaml, 0.038; NOT the geometric zero of the "
+                             "four-bar chain, which lies outside the joint limit and is refused by MoveIt)")
+    parser.add_argument("--angle-closed", default="1.25478",
+                        help="rg6_finger_joint angle 'close' -- the narrowest "
+                             "pose, 0.4 mm.  NOT the 1.3 of upstream: "
+                             "there the fingers already pass through one "
+                             "another in the model (default: 1.25478)")
+    parser.add_argument("--controller-name",
+                        default="manipulators/rg6_gripper_controller",
+                        help="MoveIt controller name moveit.yaml is checked against "
+                             "(it is set in robot.yaml, not here)")
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
+
+    setup = args.setup_path.rstrip("/")
+    log(f"start (setup: {setup}).")
+    if args.angle_open is None:
+        args.angle_open = resolve_open_angle(args.model_config)
+    patch_srdf(os.path.join(setup, "robot.srdf"), args)
+    # Only a check now: moveit.yaml is filled by the Clearpath generator from
+    # robot.yaml (see the module docstring). Exit code 1 instead of silently
+    # running without a gripper controller; no abort for the caller, both
+    # call sites (installer, offboard entrypoint) only log it.
+    ok = verify_moveit_yaml(
+        os.path.join(setup, "manipulators", "config", "moveit.yaml"), args)
+    if not ok:
+        # On stdout as well: whoever reads only one stream (docker logs mixes
+        # both unsorted) should still see the failure.
+        log("done - BUT the moveit.yaml check failed (details on stderr).")
+        return 1
+    log("done.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
