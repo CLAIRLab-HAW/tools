@@ -32,7 +32,7 @@
 // measured joint has stood still for plant_settle_s; it stalled on something
 // -- grip_detected -- when that happens short of a closing target by more than
 // plant_grip_margin_m.  The plant publishes the driver joint itself, so this
-// node does not.  Written for MARWIN 5's MuJoCo plant (deploy/marwin), whose
+// node does not.  Written for MARWIN 5's MuJoCo plant (deploy/offboard/marwin), whose
 // RG6 is a force-limited servo in the physics; the same mode drives any hand a
 // position controller moves, a real one included.
 //
