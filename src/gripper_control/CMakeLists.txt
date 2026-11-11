@@ -15,7 +15,6 @@ find_package(control_msgs REQUIRED)
 # gripper_sim: any gripper model's GripperCommand surface without hardware (its model comes in as parameters).
 add_executable(gripper_sim src/gripper_sim.cpp)
 target_include_directories(gripper_sim PRIVATE include)
-add_executable(joint_state_aggregator src/joint_state_aggregator.cpp)
 add_executable(joint_state_relay src/joint_state_relay.cpp)
 
 target_link_libraries(gripper_sim
@@ -24,11 +23,6 @@ target_link_libraries(gripper_sim
   ${sensor_msgs_TARGETS}
   ${std_msgs_TARGETS}
   ${control_msgs_TARGETS}
-)
-target_link_libraries(joint_state_aggregator PUBLIC
-  ${sensor_msgs_TARGETS}
-  rclcpp::rclcpp
-  sensor_msgs::sensor_msgs_library
 )
 target_link_libraries(joint_state_relay PUBLIC
   ${sensor_msgs_TARGETS}
@@ -42,7 +36,7 @@ install(DIRECTORY launch
 install(DIRECTORY include/
   DESTINATION include
 )
-install(TARGETS gripper_sim joint_state_aggregator joint_state_relay
+install(TARGETS gripper_sim joint_state_relay
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 

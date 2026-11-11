@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>What every gripper model shares, on both stages: gripper_sim serves a model's GripperCommand action,
     flat-JSON state and driver joint without hardware (the model comes in as parameters), and the joint_states
-    aggregator and relay put the hand's joint on the robot's buses.</description>
+    relay puts the hand's joint on the robot's bus.</description>
   <maintainer email="hannes.voss@haw-hamburg.de">Hannes Voss</maintainer>
   <license>BSD-3-Clause</license>
 

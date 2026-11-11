@@ -6,7 +6,7 @@ ROS 2 Jazzy packages for end effectors: parallel grippers (OnRobot RG6, Robotiq 
 
 | Path | Type | Contents |
 |---|---|---|
-| `src/gripper_control` | ament_cmake | `gripper_sim`, `linkage.hpp`, `joint_state_relay`, `joint_state_aggregator` |
+| `src/gripper_control` | ament_cmake | `gripper_sim`, `linkage.hpp`, `joint_state_relay` |
 | `src/rg6_control` | ament_cmake | `rg6_grip_bridge.py` with `rg6_finger_kinematics.json`, `rg6_moveit_patch` |
 | `src/rg6_description` | ament_cmake | OnRobot RG6 v2: URDF/xacro, meshes, `config/rg6_v2.yaml` |
 | `src/tool_description` | ament_cmake | Tool macros `rg6_tool(parent)` and `key_holder(parent)`, key holder meshes |
@@ -51,10 +51,13 @@ ros2 run gripper_control gripper_sim --ros-args -r __ns:=<ns> --params-file mode
 
 | Node | Input | Output |
 |---|---|---|
-| `joint_state_aggregator` | arm, gripper, platform joint states | one complete `joint_states` |
 | `joint_state_relay` | `manipulators/joint_states`, `…/endeffectors/joint_states` | `platform/joint_states` |
 
 The relay publishes RELIABLE because `move_group` subscribes RELIABLE.
+
+`platform/joint_states` is then the whole robot's one joint bus: wheels, arm and gripper, each message one part of
+the robot. A reader gathers the joints by name; for a one-shot look at the arm,
+`ros2 topic echo /a200_0553/platform/joint_states --once --filter "'arm_0_elbow_joint' in m.name"`.
 
 ## RG6
 
