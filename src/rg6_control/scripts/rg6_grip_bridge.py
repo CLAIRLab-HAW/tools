@@ -53,6 +53,8 @@ DEFAULT_URL = "http://192.168.131.40:41414/"
 #: actually do.
 WIDTH_RANGE_MM = (0.0, 160.0)
 FORCE_RANGE_N = (0.0, 120.0)
+#: How often the executor wakes to notice a stop [s]; the bound on how long a SIGTERM takes (see run()).
+SHUTDOWN_POLL_S = 0.5
 
 
 class Rg6Error(Exception):
@@ -770,17 +772,24 @@ def run(argv) -> int:
     log.info(f"rg6_grip_bridge ready: {client.url} ◀─ {action_name}")
     # MultiThreaded because on_action blocks until the hand stands still (about 1.3 s).  Single threaded, that one call
     # would stall /motion/gripper_cmd and every further delivery for the same time.
-    from rclpy.executors import MultiThreadedExecutor
+    from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 
+    # A wake-up for the executor, which otherwise waits on nothing but the action server: rclpy's SIGTERM handler
+    # shuts the context down and triggers a guard condition that does not wake the wait under rmw_zenoh, so the stop
+    # only lands with the next event.  Without one, systemd's SIGTERM went unanswered until SIGKILL and the unit ended
+    # 'failed' on every stack restart (2026-11-11: a bare rclpy node without a timer survived SIGTERM, with a 0.5 s
+    # timer it exited; rmw_zenoh 0.2.10 on the robot, 0.2.11 in the image).
+    node.create_timer(SHUTDOWN_POLL_S, lambda: None)
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(node)
     try:
         executor.spin()
-    except KeyboardInterrupt:
-        pass
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass  # normal stop (Ctrl+C / systemd)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
     return 0
 
 
