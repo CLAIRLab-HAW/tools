@@ -428,7 +428,7 @@ def verify_moveit_yaml(path, args):
             log(f"  missing: {item}", err=True)
         log(
             "They come from robot.yaml -> manipulators.moveit.ros_parameters."
-            "move_group (SSOT: husky-custom-setup). An outdated robot.yaml in the "
+            "move_group (SSOT: husky/setup/config/robot.yaml). An outdated robot.yaml in the "
             "container (ROBOT_YAML_URL) or under /etc/clearpath?",
             err=True,
         )
